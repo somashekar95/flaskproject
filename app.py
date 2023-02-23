@@ -1,7 +1,7 @@
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 from torch.utils.data import Dataset, DataLoader
 import torch
-from flask import Flask
+from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
 
@@ -92,3 +92,61 @@ train(model, tokenizer, dataset, device, batch_size, num_epochs, learning_rate)
 
 # Save the trained model
 torch.save(model.state_dict(),"trained_model.pth") 
+
+
+# Load the saved model
+model_path = "trained_model.pth"
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+model = GPT2LMHeadModel.from_pretrained("gpt2")
+model.load_state_dict(torch.load(model_path))
+model.eval()
+
+# Define the generation function
+def generate_response(prompt):
+    # Tokenize the prompt
+    input_ids = tokenizer.encode(prompt, return_tensors='pt')
+
+    # Generate the response
+    output = model.generate(
+        input_ids,
+        do_sample=True,
+        max_length=100,
+        top_p=0.92,
+        top_k=0,
+        temperature=0.8,
+        num_return_sequences=1,
+    )
+
+    # Decode the generated text
+    response = tokenizer.decode(output[0], skip_special_tokens=True)
+    
+    return response
+
+
+@app.route('/')
+def index():
+    return '''
+        <form method="POST" action="/generate_response">
+            <label for="prompt">Enter a request:</label>
+            <input type="text" id="prompt" name="prompt" required>
+            <br><br>
+            <input type="submit" value="Generate">
+        </form>
+    '''
+@app.route('/generate_response', methods=['POST'])
+def generate_response():
+    prompt = request.form['prompt']
+    model = GPT2LMHeadModel.from_pretrained("gpt2")
+    model.load_state_dict(torch.load("trained_model.pth"))
+# Tokenize the prompt and generate the response
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = model.generate(inputs['input_ids'], max_length=1024, num_beams=5, no_repeat_ngram_size=2, early_stopping=True)
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    
+# Return the response
+    return response
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
